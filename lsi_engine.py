@@ -440,3 +440,138 @@ class LatentSemanticIndexingEngine:
             "predicted_category": predicted_category,
             "ranked_documents": ranked_results
         }
+
+
+# ==============================================================================
+# INTERACTIVE CLI DEMO & LAB RUNNER
+# ==============================================================================
+
+def run_cli_lsi():
+    """Interactive command-line execution for Assignment 8 (Latent Semantic Indexing)."""
+    print("=" * 75)
+    print("  ASSIGNMENT 8: LATENT SEMANTIC INDEXING (LSI) & TRUNCATED SVD")
+    print("=" * 75)
+
+    engine = LatentSemanticIndexingEngine(stop_words="english", random_state=42)
+    current_corpus = LAB_MANUAL_ML_CORPUS
+    current_name = "Exact 5-Document ML/NLP Corpus (Lab Manual)"
+    k = 2
+
+    # Fit default
+    engine.fit(current_corpus, n_components=k)
+
+    while True:
+        print("\n" + "-" * 75)
+        print(f"  ACTIVE CORPUS: {current_name}")
+        print(f"  ACTIVE LATENT CONCEPTS: k = {engine.n_components}")
+        print("  SELECT AN OPTION:")
+        print("  1. Switch / Inspect Corpus (ML/NLP vs Customer Opinion vs Deerwester)")
+        print("  2. Display Document-Term TF-IDF Matrix A & Vocabulary")
+        print("  3. Display Decomposed SVD Matrices (U, Sigma, V^T)")
+        print("  4. Display Latent Topic Profiles & Salient Keyword Loadings")
+        print("  5. Display Explained Variance Ratio (Individual & Cumulative)")
+        print("  6. Display Document-to-Document Cosine Similarity Matrix (LSI vs TF-IDF)")
+        print("  7. Run Semantic Query Search & Categorization (with Semantic Boost)")
+        print("  8. Change Latent Dimension k")
+        print("  0. Exit")
+        print("-" * 75)
+
+        choice = input("Enter choice (0-8): ").strip()
+
+        if choice == "0":
+            print("Exiting LSI Engine. Goodbye!")
+            break
+
+        elif choice == "1":
+            print("\n[Corpus Options]:")
+            print("  1. Exact 5-Document ML/NLP Corpus (Lab Manual)")
+            print("  2. Customer Support / Opinion Mining Review Corpus (12 reviews)")
+            print("  3. Classic Deerwester IR Corpus (9 documents)")
+            sub = input("Select (1-3): ").strip()
+            if sub == "2":
+                current_corpus = CUSTOMER_SUPPORT_OPINION_CORPUS
+                current_name = "Customer Support / Opinion Mining Review Corpus"
+                k = min(3, len(current_corpus) - 1)
+            elif sub == "3":
+                current_corpus = DEERWESTER_IR_CORPUS
+                current_name = "Classic Deerwester IR Corpus"
+                k = 2
+            else:
+                current_corpus = LAB_MANUAL_ML_CORPUS
+                current_name = "Exact 5-Document ML/NLP Corpus (Lab Manual)"
+                k = 2
+            engine.fit(current_corpus, n_components=k)
+            print(f"\nLoaded {len(current_corpus)} documents. SVD re-fit with k={engine.n_components}.")
+
+        elif choice == "2":
+            df_A, stats = engine.get_matrix_a_df(max_features=15)
+            print(f"\n[Matrix A Stats]: {stats}")
+            print("\nDocument-Term Matrix A (Sample 15 features):")
+            print(df_A.to_string())
+
+        elif choice == "3":
+            decomp = engine.get_decomposed_matrices()
+            print("\n[1. Document-Topic Matrix U (m x k)]:")
+            print(decomp["U"].to_string())
+            print("\n[2. Singular Values Matrix Sigma (k x k)]:")
+            print(decomp["Sigma"].to_string())
+            print("\n[3. Topic-Term Loading Matrix V^T (k x n) (Sample top 15 terms)]:")
+            print(decomp["VT"].iloc[:, :15].to_string())
+
+        elif choice == "4":
+            profiles = engine.get_latent_topics_profile(top_n_keywords=5)
+            print("\n[Latent Topic Profiles]:")
+            for p in profiles:
+                print(f"\n* {p['topic_name']} (Singular Value: {p['singular_value']}, Explained Variance: {p['variance_explained_pct']}%):")
+                print(f"  Dominant Keywords: {', '.join(p['dominant_keywords'])}")
+                print(f"  Top Positive Loadings: {p['top_positive']}")
+                print(f"  Top Negative Loadings: {p['top_negative']}")
+
+        elif choice == "5":
+            var_data = engine.get_explained_variance_data()
+            print("\n[Explained Variance Ratio]:")
+            for comp, ind_v, cum_v in zip(var_data["components"], var_data["individual_variance"], var_data["cumulative_variance"]):
+                print(f"  {comp}: Individual = {ind_v}% | Cumulative = {cum_v}%")
+            print(f"  Total Variance Retained: {var_data['total_variance_explained']}%")
+
+        elif choice == "6":
+            print("\n[Document-to-Document Cosine Similarity Matrix (LSI Latent Space)]:")
+            doc_labels = [d["id"] for d in current_corpus]
+            df_sim_lsi = pd.DataFrame(np.round(engine.lsi_cosine_sim_matrix, 4), index=doc_labels, columns=doc_labels)
+            print(df_sim_lsi.to_string())
+
+            print("\n[Document-to-Document Cosine Similarity Matrix (Raw TF-IDF Space)]:")
+            df_sim_tfidf = pd.DataFrame(np.round(engine.tfidf_cosine_sim_matrix, 4), index=doc_labels, columns=doc_labels)
+            print(df_sim_tfidf.to_string())
+
+        elif choice == "7":
+            if current_corpus == LAB_MANUAL_ML_CORPUS:
+                sample_q = "neural computation network"
+            elif current_corpus == CUSTOMER_SUPPORT_OPINION_CORPUS:
+                sample_q = "ATM swallowed card cash not given"
+            else:
+                sample_q = "human interface response time"
+
+            q_in = input(f"Enter query [default: '{sample_q}']: ").strip() or sample_q
+            res = engine.query_semantic_search(q_in, top_k=5)
+
+            print(f"\n[Search Results for: '{res['query']}']:")
+            print(f"  Matched Vocabulary Tokens: {res['raw_matched_tokens']}")
+            print(f"  Query LSI Coordinates: {res['query_lsi_vector']}")
+            print(f"  Dominant Latent Concept: {res['dominant_topic']}")
+            print(f"  Predicted Category: {res['predicted_category']}")
+            print("\nRanked Documents by Semantic Similarity:")
+            df_res = pd.DataFrame(res["ranked_documents"])[["rank", "doc_id", "title", "category", "lsi_similarity", "tfidf_similarity", "semantic_boost"]]
+            print(df_res.to_string(index=False))
+
+        elif choice == "8":
+            max_valid = max(2, min(len(current_corpus) - 1, len(engine.vocabulary) - 1))
+            k_in = input(f"Enter new k (2 to {max_valid}) [current: {engine.n_components}]: ").strip()
+            if k_in.isdigit():
+                new_k = max(2, min(int(k_in), max_valid))
+                engine.fit(current_corpus, n_components=new_k)
+                print(f"Re-fitted SVD with k={engine.n_components}.")
+
+
+if __name__ == "__main__":
+    run_cli_lsi()
