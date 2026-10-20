@@ -1,23 +1,25 @@
 # IntelliDesk: AI-Powered Support Query Routing & NLP Lab
-## NLP Laboratory Suite: Assignment 6 & Assignment 7
+## NLP Laboratory Suite: Assignment 6, Assignment 7 & Assignment 8
 
 ---
 
 ### 📌 Overview
-**IntelliDesk** is a dual-module NLP intelligence and evaluation platform designed for:
+**IntelliDesk** is a modular enterprise NLP intelligence and evaluation platform containing 3 complete laboratory modules:
 1. **Module 1 (Assignment 6)**: TF-IDF Text Classification & Department Routing.
 2. **Module 2 (Assignment 7)**: N-Gram Language Models, Laplace (Add-1) Smoothing & Perplexity Evaluation.
+3. **Module 3 (Assignment 8)**: Latent Semantic Indexing (LSI) & Truncated Singular Value Decomposition (SVD) for Document Categorization & Opinion Mining.
 
-The system features two completely separated tabs and settings controls, allowing students and instructors to independently inspect, verify, benchmark, and interact with both assignments.
+The system features three cleanly separated tabs and dedicated sidebar settings controls, allowing students and instructors to independently inspect, verify, benchmark, and interact with all three assignments.
 
 ---
 
 ### 📁 Architecture & File Structure
 ```
 Asg-6_7/
-├── app.py                  # Main Streamlit UI (Tab 1: Asg 6, Tab 2: Asg 7)
-├── tfidf_classifier.py     # Module 1: TF-IDF Vectorizer, Math Proof, Classifiers
+├── app.py                  # Main Streamlit UI (Tab 1: Asg 6, Tab 2: Asg 7, Tab 3: Asg 8)
+├── tfidf_classifier.py     # Module 1: TF-IDF Vectorizer, Math Proof, Multi-Model Benchmark
 ├── ngram_engine.py         # Module 2: Pure Scratch N-Gram Language Model & 8-Option Lab Menu
+├── lsi_engine.py           # Module 3: Latent Semantic Indexing (LSI) & Truncated SVD Engine
 └── README.md               # Complete Project & Mathematical Documentation
 ```
 
@@ -49,11 +51,6 @@ Asg-6_7/
 
 *Implemented completely from scratch using Python standard libraries (`collections.Counter`, `math`, `random`, `re`) — zero external NLP dependencies.*
 
-### Corpora Supported:
-1. **Default Lab Manual NLP Corpus**: 15 foundational NLP sentences covering language modeling, smoothing, and perplexity.
-2. **Support Ticket Domain Corpus**: 113 realistic banking and student queries from Module 1.
-3. **Custom User Corpus**: Interactive text area allowing users to enter custom domain text.
-
 ### Exact 8-Option Lab Manual Menu Structure:
 
 | Option | Feature | Implementation Details |
@@ -69,9 +66,41 @@ Asg-6_7/
 
 ---
 
+## 📑 Module 3: Assignment 8 (Latent Semantic Indexing & Truncated SVD)
+
+*Implements Latent Semantic Indexing (LSI / LSA) using `TfidfVectorizer(stop_words='english')` and `TruncatedSVD(n_components=k, random_state=42)`.*
+
+### Corpora Supported:
+1. **(a) Exact 5-Document ML/NLP Corpus (Lab Manual)**:
+   - ML Foundations, Deep Neural Networks, Natural Language Processing, Computer Vision, and AI Integration.
+2. **(b) Customer Support / Opinion Mining Review Corpus**:
+   - 12 realistic reviews across banking & academic services with explicit Positive/Negative sentiment tags.
+3. **(c) Classic Deerwester Information Retrieval Corpus**:
+   - 9 classic IR titles (HCI vs. Graph Theory).
+
+### Mathematical Formulation:
+$$A_{m \times n} \approx U_{m \times k} \cdot \Sigma_{k \times k} \cdot V_{k \times n}^T$$
+- **Document-Term Matrix $A$ ($m \times n$)**: Initial TF-IDF feature space.
+- **Document-Topic Matrix $U$ ($m \times k$)**: Orthonormal document coordinates in latent semantic concept space.
+- **Singular Values Matrix $\Sigma$ ($k \times k$)**: Diagonal matrix holding singular energies $\sigma_1 \ge \sigma_2 \ge \dots \ge \sigma_k > 0$.
+- **Topic-Term Loading Matrix $V^T$ ($k \times n$)**: Salient keyword loadings defining each latent semantic topic.
+
+### Key Capabilities:
+1. **Interactive Slider for $k$ Latent Concepts**: Dynamically re-factors SVD and updates matrices and similarity spaces.
+2. **Explained Variance Ratio**: Plotly bar chart with cumulative curve measuring retained corpus information.
+3. **Interactive Document Cosine Similarity Heatmap**:
+   - Computes $S_{ij} = \frac{\mathbf{d}_i \cdot \mathbf{d}_j}{\|\mathbf{d}_i\|_2 \|\mathbf{d}_j\|_2}$ in $k$-dimensional latent space.
+   - Toggle to compare side-by-side with raw TF-IDF space to visualize semantic concept clustering.
+4. **Semantic Query Search & Opinion Mining**:
+   - Projects user query: $q_{\text{LSI}} = \text{svd.transform}(q_{\text{tfidf}})$.
+   - Ranks documents by LSI Cosine Similarity.
+   - Computes **Semantic Boost** ($S_{\text{LSI}} - S_{\text{TF-IDF}}$), solving **synonymy and polysemy** even when exact keywords do not match!
+
+---
+
 ### 🚀 Running the Application
 
-1. **Launch the Unified Streamlit App**:
+1. **Launch the Unified Streamlit App (All 3 Modules)**:
 ```bash
 python -m streamlit run app.py --server.port 8502
 ```
@@ -81,4 +110,4 @@ Access the application at: **`http://localhost:8502`**.
 ```bash
 python ngram_engine.py
 ```
-This runs the interactive CLI menu directly in your terminal following the exact numbered lab manual format.
+This launches the interactive console menu directly in your command line.

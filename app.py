@@ -2,6 +2,7 @@
 app.py - IntelliDesk: Intelligent Query Classification & NLP Lab
 Tab 1: Assignment 6 (TF-IDF Text Classification)
 Tab 2: Assignment 7 (N-Gram Language Models, Smoothing & Perplexity)
+Tab 3: Assignment 8 (Latent Semantic Indexing using TF-IDF & Truncated SVD)
 """
 
 import streamlit as st
@@ -18,6 +19,14 @@ from ngram_engine import (
     NGramLanguageModel,
     DEFAULT_LAB_CORPUS,
     SUPPORT_TICKET_CORPUS
+)
+
+# Module 3 Imports (Latent Semantic Indexing & Truncated SVD)
+from lsi_engine import (
+    LatentSemanticIndexingEngine,
+    LAB_MANUAL_ML_CORPUS,
+    CUSTOMER_SUPPORT_OPINION_CORPUS,
+    DEERWESTER_IR_CORPUS
 )
 
 # ==============================================================================
@@ -109,7 +118,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# SIDEBAR CONTROLS (SEPARATED FOR ASG 6 & ASG 7)
+# SIDEBAR CONTROLS (SEPARATED FOR ASG 6, ASG 7 & ASG 8)
 # ==============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/4712/4712035.png", width=55)
@@ -119,7 +128,11 @@ with st.sidebar:
 
     sidebar_module_focus = st.radio(
         "🎛️ Configure Settings For:",
-        options=["📊 Assignment 6 (TF-IDF)", "📖 Assignment 7 (N-Gram Models)"],
+        options=[
+            "📊 Assignment 6 (TF-IDF)",
+            "📖 Assignment 7 (N-Gram Models)",
+            "📑 Assignment 8 (Latent Semantic Indexing)"
+        ],
         index=0
     )
 
@@ -144,13 +157,7 @@ with st.sidebar:
         asg6_test_size = st.slider("Test Split Ratio:", min_value=0.15, max_value=0.35, value=0.25, step=0.05)
         asg6_seed = st.number_input("Random Seed (Asg 6):", min_value=1, max_value=999, value=42, step=1)
 
-    else:
-        # Defaults for Asg 6 when not in focus
-        domain_key = "banking"
-        dataset_choice = "🏦 Banking Support"
-        asg6_test_size = 0.25
-        asg6_seed = 42
-
+    elif "Assignment 7" in sidebar_module_focus:
         st.markdown("### 📖 Asg 7: Training Corpus")
         corpus_choice = st.radio(
             "Select Training Corpus:",
@@ -170,15 +177,49 @@ with st.sidebar:
         - **Smoothing**: Laplace (Add-1)
         """)
 
+    else:
+        st.markdown("### 📑 Asg 8: LSI Corpus & Topics")
+        lsi_corpus_choice = st.radio(
+            "Select Corpus for LSI:",
+            options=[
+                "(a) 📚 Exact 5-Document ML/NLP Corpus (Lab Manual)",
+                "(b) 💬 Customer Support / Opinion Mining Corpus (12 Reviews)",
+                "(c) 🏛️ Classic Deerwester IR Corpus (9 Docs)"
+            ],
+            index=0
+        )
+        
+        # Max components depending on corpus
+        max_k_default = 4 if "(a)" in lsi_corpus_choice else 6
+        lsi_k_components = st.slider("Latent Concepts (k components):", min_value=2, max_value=max_k_default, value=2, step=1)
+
+        st.markdown("---")
+        st.markdown("### ⚙️ SVD Hyperparameters")
+        st.markdown("""
+        - **Vectorizer**: `TfidfVectorizer(stop_words='english')`
+        - **Decomposition**: `TruncatedSVD(random_state=42)`
+        - **Similarity**: Cosine in Latent Space
+        """)
+
     st.markdown("---")
     st.caption("IntelliDesk NLP Lab • Academic Session 2026")
 
-# Set default corpus choice if Asg 6 was focused
+# Set sensible defaults for whichever module is not focused
+if "domain_key" not in locals():
+    domain_key = "banking"
+    dataset_choice = "🏦 Banking Support"
+    asg6_test_size = 0.25
+    asg6_seed = 42
+
 if "corpus_choice" not in locals():
     corpus_choice = "📚 Default Lab Manual NLP Corpus (15 sentences)"
 
+if "lsi_corpus_choice" not in locals():
+    lsi_corpus_choice = "(a) 📚 Exact 5-Document ML/NLP Corpus (Lab Manual)"
+    lsi_k_components = 2
+
 # ==============================================================================
-# PIPELINE CACHING (ASG 6 & ASG 7)
+# PIPELINE CACHING (ASG 6, ASG 7 & ASG 8)
 # ==============================================================================
 
 # Module 1 Pipeline Caching
@@ -199,7 +240,6 @@ def get_cached_ngram_model(choice: str, custom_text: str = ""):
     elif "Support Ticket" in choice:
         corpus = SUPPORT_TICKET_CORPUS
     else:
-        # Custom user corpus
         lines = [line.strip() for line in custom_text.split("\n") if line.strip()]
         corpus = lines if lines else DEFAULT_LAB_CORPUS
     model = NGramLanguageModel(corpus)
@@ -208,12 +248,28 @@ def get_cached_ngram_model(choice: str, custom_text: str = ""):
 custom_corpus_text = st.session_state.get("custom_corpus_text", "")
 ngram_model, active_corpus_list = get_cached_ngram_model(corpus_choice, custom_corpus_text)
 
+# Module 3 LSI Engine Caching
+@st.cache_resource(show_spinner=False)
+def get_cached_lsi_engine(corpus_label: str, k_comp: int):
+    if "(a)" in corpus_label:
+        corpus = LAB_MANUAL_ML_CORPUS
+    elif "(b)" in corpus_label:
+        corpus = CUSTOMER_SUPPORT_OPINION_CORPUS
+    else:
+        corpus = DEERWESTER_IR_CORPUS
+    engine = LatentSemanticIndexingEngine(stop_words="english", random_state=42)
+    engine.fit(corpus, n_components=k_comp)
+    return engine, corpus
+
+lsi_engine, lsi_corpus_active = get_cached_lsi_engine(lsi_corpus_choice, lsi_k_components)
+
 # ==============================================================================
-# MAIN TABS (CLEAN SEPARATION OF ASSIGNMENT 6 & ASSIGNMENT 7)
+# MAIN TABS (CLEAN SEPARATION OF ASSIGNMENT 6, 7 & 8)
 # ==============================================================================
-tab_asg6, tab_asg7 = st.tabs([
+tab_asg6, tab_asg7, tab_asg8 = st.tabs([
     "📊 Assignment 6: TF-IDF Text Classification",
-    "📖 Assignment 7: N-Gram Language Models, Smoothing & Perplexity"
+    "📖 Assignment 7: N-Gram Language Models, Smoothing & Perplexity",
+    "📑 Assignment 8: Latent Semantic Indexing (LSI) & Truncated SVD"
 ])
 
 
@@ -223,7 +279,6 @@ tab_asg6, tab_asg7 = st.tabs([
 # ==============================================================================
 # ==============================================================================
 with tab_asg6:
-    # Header Banner
     st.markdown(f"""
     <div class="main-header">
         <h1 style="margin: 0 0 6px 0; color: #f8fafc; font-size: 26px;">
@@ -252,7 +307,6 @@ with tab_asg6:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Accordion to explore raw dataset
     with st.expander(f"📋 Explore Current Dataset: {dataset_choice} ({len(df_asg6)} Queries)", expanded=False):
         f_col1, f_col2 = st.columns([1, 2])
         with f_col1:
@@ -270,9 +324,7 @@ with tab_asg6:
 
     st.markdown("---")
 
-    # --------------------------------------------------------------------------
     # ASG 6 - SECTION 1: VOCABULARY & SPARSE DTM
-    # --------------------------------------------------------------------------
     st.subheader("1️⃣ Vocabulary & Sparse Document-Term TF-IDF Matrix")
     st.caption("Inspection of learned tokens, document frequencies, and the sparse TF-IDF feature space.")
 
@@ -316,9 +368,7 @@ with tab_asg6:
 
     st.markdown("---")
 
-    # --------------------------------------------------------------------------
     # ASG 6 - SECTION 2: MANUAL STEP-BY-STEP MATHEMATICAL VERIFICATION
-    # --------------------------------------------------------------------------
     st.subheader("2️⃣ Manual Step-by-Step Mathematical Verification")
     st.caption("Exact derivation matching Scikit-Learn's smoothed IDF and L2 Euclidean normalization down to 6 decimal places.")
 
@@ -426,9 +476,7 @@ with tab_asg6:
 
     st.markdown("---")
 
-    # --------------------------------------------------------------------------
     # ASG 6 - SECTION 3: CLASSIFIER BENCHMARK
-    # --------------------------------------------------------------------------
     st.subheader("3️⃣ Multi-Model Benchmark & Confusion Matrix")
     st.caption("Comparison across Logistic Regression, Multinomial Naive Bayes, and Linear SVM on the stratified holdout test set.")
 
@@ -512,9 +560,7 @@ with tab_asg6:
 
     st.markdown("---")
 
-    # --------------------------------------------------------------------------
     # ASG 6 - SECTION 4: REAL-TIME QUERY CLASSIFIER
-    # --------------------------------------------------------------------------
     st.subheader("4️⃣ Real-Time Query Classifier & Confidence Diagnostic")
     st.caption("Input any live customer/student query to route it to the appropriate department with confidence score bars.")
 
@@ -623,7 +669,6 @@ with tab_asg6:
 # ==============================================================================
 # ==============================================================================
 with tab_asg7:
-    # Header Banner
     st.markdown(f"""
     <div class="main-header" style="border-left: 5px solid #a855f7;">
         <h1 style="margin: 0 0 6px 0; color: #f8fafc; font-size: 26px;">
@@ -636,7 +681,6 @@ with tab_asg7:
     </div>
     """, unsafe_allow_html=True)
 
-    # Corpus Summary KPI Cards
     summary_asg7 = ngram_model.get_corpus_summary()
     c_col1, c_col2, c_col3, c_col4, c_col5 = st.columns(5)
     with c_col1:
@@ -652,7 +696,6 @@ with tab_asg7:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Expandable Corpus Explorer & Custom Sentences
     with st.expander(f"📚 Inspect Active Corpus: {corpus_choice} ({len(active_corpus_list)} Sentences)", expanded=False):
         st.write("**First 10 Corpus Sentences:**")
         for i, s in enumerate(active_corpus_list[:10], 1):
@@ -666,9 +709,6 @@ with tab_asg7:
 
     st.markdown("---")
 
-    # ==========================================================================
-    # 8-OPTION LAB MANUAL MENU STRUCTURE
-    # ==========================================================================
     st.subheader("📑 Lab Manual 8-Option Navigation Menu")
     st.caption("Select any menu option below to explore N-gram generations, probability mathematics, and evaluation.")
 
@@ -683,9 +723,7 @@ with tab_asg7:
         "8. ✍️ Text Generator"
     ])
 
-    # --------------------------------------------------------------------------
-    # OPTION 1: CORPUS OVERVIEW & PREPROCESSING
-    # --------------------------------------------------------------------------
+    # OPTION 1: CORPUS OVERVIEW
     with menu_tabs[0]:
         st.markdown("#### Option 1: Corpus Preprocessing & Vocabulary Architecture")
         st.markdown("""
@@ -712,9 +750,7 @@ with tab_asg7:
             tokens_preview = NGramLanguageModel.tokenize(sample_preview)
             st.code(f"Raw: \"{sample_preview}\"\nUnigrams: {tokens_preview}\nBigram Padded: {['<s>'] + tokens_preview + ['</s>']}\nTrigram Padded: {['<s>', '<s>'] + tokens_preview + ['</s>']}")
 
-    # --------------------------------------------------------------------------
     # OPTION 2: N-GRAM FREQUENCY TABLES
-    # --------------------------------------------------------------------------
     with menu_tabs[1]:
         st.markdown("#### Option 2: Unigram, Bigram, and Trigram Frequency Tables")
         st.caption("Extracted and counted purely using Python `collections.Counter` without any external NLP libraries.")
@@ -728,7 +764,6 @@ with tab_asg7:
         df_table = pd.DataFrame(table_data)
 
         with o2_col2:
-            # Bar chart of top n-grams
             if not df_table.empty:
                 col_name = "Unigram" if n_select == 1 else "Bigram" if n_select == 2 else "Trigram"
                 fig_ngram = px.bar(
@@ -744,9 +779,7 @@ with tab_asg7:
 
         st.dataframe(df_table, width=1000, height=280)
 
-    # --------------------------------------------------------------------------
     # OPTION 3: MLE PROBABILITIES
-    # --------------------------------------------------------------------------
     with menu_tabs[2]:
         st.markdown("#### Option 3: Maximum Likelihood Estimation (MLE) Probabilities (Unsmoothed)")
         st.markdown(r"""
@@ -779,9 +812,7 @@ with tab_asg7:
         if "formula" in mle_res:
             st.latex(mle_res["formula"])
 
-    # --------------------------------------------------------------------------
-    # OPTION 4: LAPLACE (ADD-1) SMOOTHING CALCULATOR
-    # --------------------------------------------------------------------------
+    # OPTION 4: LAPLACE SMOOTHING
     with menu_tabs[3]:
         st.markdown("#### Option 4: Laplace (Add-1) Smoothing Calculator")
         st.markdown(r"""
@@ -816,7 +847,6 @@ with tab_asg7:
         st.markdown("<br>", unsafe_allow_html=True)
         st.latex(lap_res.get("formula_latex", ""))
 
-        # Side by side comparison: MLE vs Laplace
         c_comp1, c_comp2 = st.columns(2)
         with c_comp1:
             st.metric("MLE Probability (Unsmoothed)", f"{mle_comp.get('probability', 0.0):.6f}", help="Zero if n-gram is unseen!")
@@ -824,11 +854,9 @@ with tab_asg7:
             st.metric("Laplace Probability (Smoothed)", f"{lap_res.get('probability', 0.0):.6f}", help="Always strictly positive!")
 
         if mle_comp.get("probability", 0.0) == 0.0:
-            st.warning("⚠️ Notice: The MLE probability is 0.0 (unseen n-gram). Laplace smoothing assigned a non-zero probability, avoiding the zero-frequency probability failure!")
+            st.warning("⚠️ Notice: The MLE probability is 0.0 (unseen n-gram). Laplace smoothing assigned a non-zero probability, avoiding the zero-frequency failure!")
 
-    # --------------------------------------------------------------------------
-    # OPTION 5: SENTENCE PROBABILITY CALCULATOR
-    # --------------------------------------------------------------------------
+    # OPTION 5: SENTENCE PROBABILITY
     with menu_tabs[4]:
         st.markdown("#### Option 5: Sentence Probability Calculator (Chain Rule)")
         st.caption("Computes total sequence probability across Unigram, Bigram, and Trigram models with side-by-side Smoothing comparison.")
@@ -879,9 +907,7 @@ with tab_asg7:
             df_steps = pd.DataFrame(sent_res["steps"])
             st.dataframe(df_steps, width=1000, height=240)
 
-    # --------------------------------------------------------------------------
-    # OPTION 6: PERPLEXITY EVALUATION
-    # --------------------------------------------------------------------------
+    # OPTION 6: PERPLEXITY
     with menu_tabs[5]:
         st.markdown("#### Option 6: Perplexity Evaluation PP(W)")
         st.markdown(r"""
@@ -893,7 +919,6 @@ with tab_asg7:
         pp_sent = st.text_input("Test Sentence for Perplexity Evaluation:", value=st.session_state.get("sent_eval_input", "natural language processing is exciting"), key="asg7_pp_sent")
         
         pp_c1, pp_c2, pp_c3 = st.columns(3)
-        # Evaluate across Unigram, Bigram, and Trigram
         pp_uni = ngram_model.calculate_perplexity(pp_sent, model_type="unigram", smoothed=True)
         pp_bi = ngram_model.calculate_perplexity(pp_sent, model_type="bigram", smoothed=True)
         pp_tri = ngram_model.calculate_perplexity(pp_sent, model_type="trigram", smoothed=True)
@@ -926,7 +951,6 @@ with tab_asg7:
             """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        # Plotly comparison
         fig_pp = px.bar(
             x=["Unigram", "Bigram", "Trigram"],
             y=[pp_uni.get('perplexity', 0.0), pp_bi.get('perplexity', 0.0), pp_tri.get('perplexity', 0.0)],
@@ -938,9 +962,7 @@ with tab_asg7:
         fig_pp.update_layout(template="plotly_dark", height=280, showlegend=False, margin=dict(l=20, r=20, t=35, b=20))
         st.plotly_chart(fig_pp, width=650)
 
-    # --------------------------------------------------------------------------
-    # OPTION 7: TRIGRAM NEXT-WORD AUTOCOMPLETE PREDICTOR
-    # --------------------------------------------------------------------------
+    # OPTION 7: AUTOCOMPLETE PREDICTOR
     with menu_tabs[6]:
         st.markdown("#### Option 7: Trigram Next-Word Autocomplete Predictor")
         st.caption("Conditioned on the preceding 2 words (or 1 word fallback), predicts and ranks the most probable next word.")
@@ -980,9 +1002,7 @@ with tab_asg7:
                 for item in ac_res["predictions"]:
                     st.markdown(f"- 💡 `'{ac_prompt} {item['Word']}'` (Prob: **{item['Probability']:.4f}**)")
 
-    # --------------------------------------------------------------------------
-    # OPTION 8: WEIGHTED RANDOM SENTENCE GENERATOR
-    # --------------------------------------------------------------------------
+    # OPTION 8: TEXT GENERATOR
     with menu_tabs[7]:
         st.markdown("#### Option 8: Weighted Random Sentence Generator")
         st.caption("Generates novel sentences by sampling words from conditioned N-gram distributions starting from `<s>` until `</s>`.")
@@ -1010,3 +1030,356 @@ with tab_asg7:
 
         with st.expander("🔍 View Step-by-Step Transition Trace", expanded=False):
             st.dataframe(pd.DataFrame(gen_result["trace_steps"]), width=800, height=220)
+
+
+# ==============================================================================
+# ==============================================================================
+# TAB 3: ASSIGNMENT 8 — LATENT SEMANTIC INDEXING (LSI) & TRUNCATED SVD
+# ==============================================================================
+# ==============================================================================
+with tab_asg8:
+    st.markdown(f"""
+    <div class="main-header" style="border-left: 5px solid #06b6d4;">
+        <h1 style="margin: 0 0 6px 0; color: #f8fafc; font-size: 26px;">
+            📑 Assignment 8: Latent Semantic Indexing (LSI) & Truncated SVD
+        </h1>
+        <p style="margin: 0; color: #cbd5e1; font-size: 14px;">
+            Module 3: Dimensionality Reduction via Truncated Singular Value Decomposition ($A \\approx U \\Sigma V^T$), 
+            Topic Term Loadings, Latent Cosine Similarity Heatmap, and Semantic Information Retrieval / Opinion Mining.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Top KPI Metrics for LSI
+    df_A_mat, stats_A = lsi_engine.get_matrix_a_df()
+    var_info = lsi_engine.get_explained_variance_data()
+    m_docs = len(lsi_corpus_active)
+    n_terms = len(lsi_engine.vocabulary)
+    reduction_pct = round((1.0 - (lsi_engine.n_components / n_terms)) * 100, 1) if n_terms > 0 else 0.0
+
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    with kpi1:
+        st.markdown(f"""<div class="metric-card"><div class="metric-val">{m_docs}</div><div class="metric-lbl">Documents (m)</div></div>""", unsafe_allow_html=True)
+    with kpi2:
+        st.markdown(f"""<div class="metric-card"><div class="metric-val">{n_terms}</div><div class="metric-lbl">Vocabulary (n)</div></div>""", unsafe_allow_html=True)
+    with kpi3:
+        st.markdown(f"""<div class="metric-card"><div class="metric-val" style="color: #06b6d4;">k={lsi_engine.n_components}</div><div class="metric-lbl">Latent Concepts</div></div>""", unsafe_allow_html=True)
+    with kpi4:
+        st.markdown(f"""<div class="metric-card"><div class="metric-val" style="color: #4ade80;">{var_info.get('total_variance_explained', 0.0)}%</div><div class="metric-lbl">Explained Variance</div></div>""", unsafe_allow_html=True)
+    with kpi5:
+        st.markdown(f"""<div class="metric-card"><div class="metric-val" style="color: #f59e0b;">{reduction_pct}%</div><div class="metric-lbl">Dimension Reduction</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Expandable Corpus Inspector
+    with st.expander(f"📚 Inspect Active LSI Corpus: {lsi_corpus_choice} ({m_docs} Documents)", expanded=False):
+        df_corp_preview = pd.DataFrame([
+            {
+                "ID": d["id"],
+                "Title": d["title"],
+                "Category": d.get("category", "N/A"),
+                "Sentiment": d.get("sentiment", "N/A"),
+                "Full Text": d["text"]
+            }
+            for d in lsi_corpus_active
+        ])
+        st.dataframe(df_corp_preview, width=1000, height=230)
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # LSI SECTION 1: DOCUMENT-TERM TF-IDF MATRIX A
+    # --------------------------------------------------------------------------
+    st.subheader("1️⃣ Document-Term TF-IDF Matrix $A$ & Vocabulary")
+    st.caption("Initial high-dimensional sparse vector space representation before SVD dimensionality reduction.")
+
+    lsi_s1_col1, lsi_s1_col2, lsi_s1_col3, lsi_s1_col4 = st.columns(4)
+    lsi_s1_col1.metric("Matrix Shape (m x n)", stats_A.get("Matrix Shape (m x n)", "N/A"))
+    lsi_s1_col2.metric("Total Document Rows", stats_A.get("Total Documents (m)", 0))
+    lsi_s1_col3.metric("Vocabulary Features", stats_A.get("Total Vocabulary Terms (n)", 0))
+    lsi_s1_col4.metric("Matrix Sparsity", f"{stats_A.get('Sparsity (%)', 0)}%")
+
+    st.caption("Displaying TF-IDF matrix values (documents as rows, vocabulary terms as columns):")
+    st.dataframe(
+        df_A_mat.style.background_gradient(cmap="Blues", low=0.0, high=0.8).format("{:.4f}"),
+        width=1000,
+        height=260
+    )
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # LSI SECTION 2: SVD DECOMPOSITION (U, Σ, V^T)
+    # --------------------------------------------------------------------------
+    st.subheader("2️⃣ Truncated SVD Matrix Factorization: $A \\approx U_k \\Sigma_k V_k^T$")
+    st.caption("Low-rank matrix factorization decomposing the document-term space into latent semantic concepts.")
+
+    st.markdown(r"""
+    <div class="verif-box">
+        <h4 style="margin-top: 0; color: #06b6d4;">📐 Mathematical Formulation of Latent Semantic Indexing:</h4>
+        <div style="font-size: 15px; line-height: 1.8;">
+            <b>1. Low-Rank Approximation:</b> $A_{m \times n} \approx U_{m \times k} \cdot \Sigma_{k \times k} \cdot V_{k \times n}^T$<br>
+            <b>2. Document-Topic Matrix $U$:</b> Orthonormal columns representing document coordinates along $k$ latent semantic concepts.<br>
+            <b>3. Singular Values $\Sigma$:</b> Diagonal matrix with $\sigma_1 \ge \sigma_2 \ge \dots \ge \sigma_k > 0$, measuring the singular energy of each concept.<br>
+            <b>4. Topic-Term Loading Matrix $V^T$:</b> Rows represent latent topics; columns represent term loadings (positive/negative associations).
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    decomp_matrices = lsi_engine.get_decomposed_matrices()
+    topic_profiles = lsi_engine.get_latent_topics_profile(top_n_keywords=6)
+
+    svd_tab_U, svd_tab_Sigma, svd_tab_VT, svd_tab_profiles = st.tabs([
+        "📄 Document-Topic Matrix U (m × k)",
+        "💎 Singular Values Σ (k × k)",
+        "🔤 Topic-Term Matrix V^T (k × n)",
+        "🏷️ Latent Topic Concept Profiles"
+    ])
+
+    with svd_tab_U:
+        u_col1, u_col2 = st.columns([1, 1])
+        with u_col1:
+            st.markdown(f"**Orthonormal Matrix $U$ ($m \\times k = {m_docs} \\times {lsi_engine.n_components}$):**")
+            st.dataframe(
+                decomp_matrices["U"].style.background_gradient(cmap="Purples", low=0.0, high=0.8).format("{:.4f}"),
+                width=500,
+                height=260
+            )
+        with u_col2:
+            st.markdown("**2D Document Projection in Latent Space (Topics 1 & 2):**")
+            df_scatter = pd.DataFrame({
+                "Doc": [f"{d['id']}: {d['title']}" for d in lsi_corpus_active],
+                "Category": [d.get("category", "N/A") for d in lsi_corpus_active],
+                "Topic 1 Loading": lsi_engine.doc_lsi_embeddings[:, 0],
+                "Topic 2 Loading": lsi_engine.doc_lsi_embeddings[:, 1]
+            })
+            fig_scatter = px.scatter(
+                df_scatter,
+                x="Topic 1 Loading",
+                y="Topic 2 Loading",
+                color="Category",
+                text="Doc",
+                title="Semantic Document Coordinates in Latent Space"
+            )
+            fig_scatter.update_traces(textposition="top center", marker=dict(size=12))
+            fig_scatter.update_layout(template="plotly_dark", height=280, margin=dict(l=20, r=20, t=35, b=20))
+            st.plotly_chart(fig_scatter, width=500)
+
+    with svd_tab_Sigma:
+        st.markdown(f"**Diagonal Singular Values Matrix $\\Sigma$ ($k \\times k = {lsi_engine.n_components} \\times {lsi_engine.n_components}$):**")
+        st.dataframe(
+            decomp_matrices["Sigma"].style.background_gradient(cmap="Greens", low=0.0, high=0.8).format("{:.4f}"),
+            width=500,
+            height=180
+        )
+        sig_list = decomp_matrices["singular_values"]
+        st.info(" • ".join([f"**Concept {i+1} Singular Value (σ_{i+1})**: `{round(val, 4)}`" for i, val in enumerate(sig_list)]))
+
+    with svd_tab_VT:
+        st.markdown(f"**Topic-Term Matrix $V^T$ ($k \\times n = {lsi_engine.n_components} \\times {n_terms}$):** (Showing top 25 salient terms)")
+        st.dataframe(
+            decomp_matrices["VT"].style.background_gradient(cmap="coolwarm", low=0.0, high=0.8).format("{:.4f}"),
+            width=1000,
+            height=200
+        )
+
+    with svd_tab_profiles:
+        st.markdown("#### Latent Concept Profiles & Top Keyword Loadings:")
+        prof_cols = st.columns(len(topic_profiles))
+        for idx, prof in enumerate(topic_profiles):
+            with prof_cols[idx]:
+                st.markdown(f"""
+                <div class="step-card" style="border-left-color: {'#38bdf8' if idx==0 else '#a855f7' if idx==1 else '#10b981' if idx==2 else '#f59e0b'};">
+                    <h4 style="margin: 0 0 6px 0; color: #f8fafc;">{prof['topic_name']}</h4>
+                    <p style="font-size: 13px; color: #94a3b8; margin-bottom: 8px;">
+                        <b>σ = {prof['singular_value']}</b> | Variance: <b>{prof['variance_explained_pct']}%</b>
+                    </p>
+                    <p><b>Strongest Keywords:</b></p>
+                    <p><code>{', '.join(prof['dominant_keywords'])}</code></p>
+                    <p style="font-size: 12px; color: #cbd5e1;">
+                        <b>Top Positive:</b> {', '.join([t[0] for t in prof['top_positive'][:3]])}<br>
+                        <b>Top Negative:</b> {', '.join([t[0] for t in prof['top_negative'][:3]])}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # LSI SECTION 3: EXPLAINED VARIANCE RATIO
+    # --------------------------------------------------------------------------
+    st.subheader("3️⃣ Explained Variance Ratio")
+    st.caption("Evaluates the amount of semantic information and variance retained after Truncated SVD dimensionality reduction.")
+
+    ev_col1, ev_col2 = st.columns([2, 1])
+    with ev_col1:
+        df_var = pd.DataFrame({
+            "Component": var_info["components"],
+            "Individual Variance (%)": var_info["individual_variance"],
+            "Cumulative Variance (%)": var_info["cumulative_variance"]
+        })
+        
+        fig_var = go.Figure()
+        fig_var.add_trace(go.Bar(
+            x=df_var["Component"],
+            y=df_var["Individual Variance (%)"],
+            name="Individual Variance (%)",
+            marker_color="#38bdf8",
+            text=df_var["Individual Variance (%)"].apply(lambda x: f"{x:.1f}%"),
+            textposition="auto"
+        ))
+        fig_var.add_trace(go.Scatter(
+            x=df_var["Component"],
+            y=df_var["Cumulative Variance (%)"],
+            name="Cumulative Variance (%)",
+            mode="lines+markers+text",
+            marker=dict(color="#f43f5e", size=8),
+            line=dict(width=3),
+            text=df_var["Cumulative Variance (%)"].apply(lambda x: f"{x:.1f}%"),
+            textposition="top center"
+        ))
+        fig_var.update_layout(
+            template="plotly_dark",
+            height=300,
+            margin=dict(l=20, r=20, t=30, b=20),
+            yaxis=dict(range=[0, 115]),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_var, width=700)
+
+    with ev_col2:
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: left; padding: 20px;">
+            <h4 style="margin: 0 0 8px 0; color: #4ade80;">💡 SVD Compression Insight:</h4>
+            <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6;">
+                Reducing dimensionality from <b>{n_terms} vocabulary words</b> to <b>{lsi_engine.n_components} latent concepts</b> retains 
+                <strong style="color: #38bdf8;">{var_info.get('total_variance_explained', 0.0)}%</strong> of the total corpus variance.
+            </p>
+            <p style="font-size: 13px; color: #94a3b8; margin: 0;">
+                By discarding noisy minor singular values, LSI uncovers latent semantic relationships and eliminates synonymy / polysemy artifacts.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # LSI SECTION 4: COSINE SIMILARITY HEATMAP
+    # --------------------------------------------------------------------------
+    st.subheader("4️⃣ Interactive Document Cosine Similarity Heatmap")
+    st.caption("Comparison of document-to-document similarity in reduced Latent Semantic Space vs. Raw TF-IDF Keyword Space.")
+
+    sim_choice = st.radio(
+        "Select Similarity Space:",
+        options=["✨ LSI Latent Space Cosine Similarity (Semantic Concepts)", "📊 Raw TF-IDF Cosine Similarity (Exact Keywords)"],
+        horizontal=True,
+        key="asg8_sim_space"
+    )
+
+    doc_short_labels = [f"{d['id']}: {d['title'][:18]}" for d in lsi_corpus_active]
+    sim_matrix = lsi_engine.lsi_cosine_sim_matrix if "LSI" in sim_choice else lsi_engine.tfidf_cosine_sim_matrix
+
+    fig_heat = px.imshow(
+        sim_matrix,
+        x=doc_short_labels,
+        y=doc_short_labels,
+        labels=dict(x="Document", y="Document", color="Cosine Similarity"),
+        text_auto=".2f",
+        color_continuous_scale="Viridis" if "LSI" in sim_choice else "Blues",
+        range_color=[0, 1] if "LSI" in sim_choice else [0, 1],
+        title=f"Document-to-Document Cosine Similarity Heatmap ({'LSI Latent Space' if 'LSI' in sim_choice else 'Raw TF-IDF Space'})"
+    )
+    fig_heat.update_layout(template="plotly_dark", height=420, margin=dict(l=20, r=20, t=40, b=20))
+    st.plotly_chart(fig_heat, width=1000)
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # LSI SECTION 5: SEMANTIC QUERY SEARCH & OPINION MINING
+    # --------------------------------------------------------------------------
+    st.subheader("5️⃣ Semantic Query Search & Document Categorization")
+    st.caption("Input any query or opinion. LSI projects it into latent space to find the semantically closest document even when exact keywords don't match.")
+
+    # Contextual quick prompts depending on active corpus
+    if "(a)" in lsi_corpus_choice:
+        lsi_q_samples = [
+            "neural network GPU computation",
+            "statistical syntax speech analysis",
+            "visual digital frame detection",
+            "AI combining algorithms and text"
+        ]
+    elif "(b)" in lsi_corpus_choice:
+        lsi_q_samples = [
+            "ATM didn't give money and card trapped",
+            "very smooth fast cash withdrawal kiosk",
+            "mobile application password expired",
+            "high loan interest penalty and hidden fees"
+        ]
+    else:
+        lsi_q_samples = [
+            "human computer interaction response time",
+            "graph tree algorithms ordering",
+            "system testing of EPS"
+        ]
+
+    st.markdown("**⚡ Quick Test Prompts (Click to Load):**")
+    lsi_btn_cols = st.columns(len(lsi_q_samples))
+    for idx, sample in enumerate(lsi_q_samples):
+        if lsi_btn_cols[idx].button(f"Query {idx+1}", key=f"asg8_q_btn_{idx}", help=sample):
+            st.session_state["lsi_query_in"] = sample
+
+    default_lsi_q = st.session_state.get("lsi_query_in", lsi_q_samples[0])
+    lsi_user_query = st.text_input(
+        "Enter Search Query / Customer Opinion:",
+        value=default_lsi_q,
+        key="asg8_search_input"
+    )
+
+    if lsi_user_query:
+        search_res = lsi_engine.query_semantic_search(lsi_user_query, top_k=min(5, m_docs))
+        top_match = search_res["ranked_documents"][0]
+
+        q_res_col1, q_res_col2 = st.columns([1, 2])
+        with q_res_col1:
+            st.markdown(f"""
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 18px;">
+                <div style="font-size: 12px; color: #94a3b8; text-transform: uppercase;">Top Semantic Match</div>
+                <div style="font-size: 24px; font-weight: 700; color: #06b6d4; margin: 4px 0;">
+                    🏆 {top_match['title']}
+                </div>
+                <div style="font-size: 14px; color: #cbd5e1; margin-top: 6px;">
+                    <b>LSI Similarity:</b> <strong style="color: #4ade80;">{top_match['lsi_similarity']}</strong><br>
+                    <b>Predicted Category:</b> <span style="color: #38bdf8;">{search_res['predicted_category']}</span><br>
+                    <b>Dominant Latent Concept:</b> <em>{search_res['dominant_topic']}</em>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with q_res_col2:
+            st.markdown(f"""
+            <div class="verif-box" style="margin: 0; padding: 16px;">
+                <h4 style="margin: 0 0 4px 0; color: #38bdf8;">🧠 Semantic Information Retrieval Diagnostic:</h4>
+                <p><b>User Query:</b> "<em>{search_res['query']}</em>"</p>
+                <p><b>Exact Keywords Matched in Vocabulary:</b> <code>{search_res['raw_matched_tokens'] if search_res['raw_matched_tokens'] else 'None (Zero Lexical Overlap!)'}</code></p>
+                <p><b>LSI Latent Projection Vector ($q_{{\\text{{LSI}}}}$):</b> <code>{search_res['query_lsi_vector']}</code></p>
+                <p style="font-size: 13px; color: #a5f3fc; margin: 0;">
+                    {"✨ <b>Zero Lexical Overlap Solved:</b> Query shared few or no exact words, yet LSI correctly routed to the conceptually relevant document via shared latent topic space!" if not search_res['raw_matched_tokens'] or top_match['semantic_boost'] > 0 else "Query successfully categorized through latent semantic projection."}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("##### 📑 Ranked Document Retrieval & Semantic Boost Table:")
+        df_ranked = pd.DataFrame(search_res["ranked_documents"])[[
+            "rank", "doc_id", "title", "category", "lsi_similarity", "tfidf_similarity", "semantic_boost", "text"
+        ]].rename(columns={
+            "rank": "Rank",
+            "doc_id": "Doc ID",
+            "title": "Document Title",
+            "category": "Category",
+            "lsi_similarity": "LSI Similarity (Semantic)",
+            "tfidf_similarity": "Raw TF-IDF Similarity (Keyword)",
+            "semantic_boost": "Semantic Boost (LSI - TFIDF)",
+            "text": "Document Excerpt"
+        })
+        st.dataframe(df_ranked, width=1000, height=240)
